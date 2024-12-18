@@ -179,7 +179,7 @@ using UnitfulAtomic
         end
     end
 
-    @testset "Functionality test run_json" begin
+    @testset "Functionality test run" begin
         using AiidaDFTK
 
         function run_functionality_test(inputfile, ref_energy; bands=false)
@@ -188,7 +188,7 @@ using UnitfulAtomic
             mktempdir(@__DIR__) do dir
                 # Run SCF and check we got all expected files
                 cd(dir) do
-                    (; output_files) = run_json(joinpath(@__DIR__, inputfile))
+                    (; output_files) = AiidaDFTK.run(joinpath(@__DIR__, inputfile))
                     for file in output_files
                         @test isfile(file)
                     end
@@ -209,6 +209,11 @@ using UnitfulAtomic
                     @test sum(values(data["energies"])) ≈ 2data["energies"]["total"]
 
                     # TODO Put tests for all keys here, which are read by Aiida
+                end
+
+                open(joinpath(dir, "$(first(splitext(inputfile))).log")) do io
+                    errors = read(io, String)
+                    @test occursin("Finished successfully", errors)
                 end
             end
             end
