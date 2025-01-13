@@ -24,8 +24,7 @@
                     1.282887730510825,
                     1.282887730510825,
                     1.282887730510825
-                ],
-                "pseudopotential": "hgh/lda/si-q4"
+                ]
             },
             {
                 "symbol": "Si",
@@ -33,10 +32,12 @@
                     -1.282887730510825,
                     -1.282887730510825,
                     -1.282887730510825
-                ],
-                "pseudopotential": "hgh/lda/si-q4"
+                ]
             }
         ]
+    },
+    "pseudopotentials": {
+        "Si": "hgh/lda/si-q4"
     },
     "model_kwargs": {
         "functionals": [

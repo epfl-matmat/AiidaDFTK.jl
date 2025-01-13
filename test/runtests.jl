@@ -12,12 +12,8 @@ using UnitfulAtomic
 @testset "AiidaDFTK.jl" begin
     system_silicon = periodic_system(
         [Atom(:Si, [ 1.28,  1.28,  1.28]u"bohr";
-              pseudopotential="hgh/lda/si-q4",
-              pseudopotential_kwargs=Dict(),
               magnetic_moment=0.0),
          Atom(:Si, [-1.28, -1.28, -1.28]u"bohr";
-              pseudopotential="hgh/lda/si-q4",
-              pseudopotential_kwargs=Dict(),
               magnetic_moment=0.0)],
         [[0.0, 5.13, 5.13],
          [5.13, 0.0, 5.13],
@@ -25,8 +21,6 @@ using UnitfulAtomic
     )
     system_iron = periodic_system(
         [Atom(:Fe, [0, 0, 0]u"bohr";
-              pseudopotential="Fe.upf",
-              pseudopotential_kwargs=Dict(:rcut => 10, ),
               magnetic_moment=4.0)],
         [[-2.711,  2.711,  2.711],
          [ 2.711, -2.711,  2.711],
@@ -61,33 +55,50 @@ using UnitfulAtomic
                                        [5.13, 0.0, 5.13],
                                        [5.13, 5.13, 0.0]],
                     "atoms" => [Dict("symbol" => "Si",
-                                     "position" => [1.28, 1.28, 1.28],
-                                     "pseudopotential" => "hgh/lda/si-q4"),
+                                     "position" => [1.28, 1.28, 1.28]),
                                 Dict("symbol" => "Si",
-                                     "position" => [-1.28, -1.28, -1.28],
-                                     "pseudopotential" => "hgh/lda/si-q4")])
+                                     "position" => [-1.28, -1.28, -1.28])],)
+
         res = AiidaDFTK.build_system(Dict("periodic_system" => data))
         test_approx_eq(res, system_silicon)
     end
 
     @testset "build_system iron" begin
-        pseudo = Dict("rcut" => 10, )
         data = Dict("bounding_box" => [[-2.711,  2.711,  2.711],
                                        [ 2.711, -2.711,  2.711],
                                        [ 2.711,  2.711, -2.711]],
                     "atoms" => [Dict("symbol" => "Fe",
                                      "position" => [0, 0, 0],
-                                     "pseudopotential" => "Fe.upf",
                                      "magnetic_moment" => 4.0,
-                                     "pseudopotential_kwargs" => pseudo,
                                     )])
         res = AiidaDFTK.build_system(Dict("periodic_system" => data))
         test_approx_eq(res, system_iron)
     end
 
+
+    @testset "build_pseudopotentials silicon" begin
+        pseudo_data = Dict(:Si => "hgh/lda/si-q4")
+        pseudos = AiidaDFTK.build_pseudopotentials(pseudo_data, system_silicon)
+
+        @test length(pseudos) == 2
+        @test pseudos[1] == pseudos[2]
+        @test pseudos[1] isa PspHgh
+    end
+
+    @testset "build_pseudopotentials iron" begin
+        pseudo_data = Dict(:Fe => "Fe.upf",
+                           Symbol("\$kwargs") => Dict("rcut" => 10))
+        pseudos = AiidaDFTK.build_pseudopotentials(pseudo_data, system_iron)
+
+        @test length(pseudos) == 1
+        @test pseudos[1] isa PspUpf
+        @test pseudos[1].rcut == 10
+    end
+
     @testset "build_basis silicon" begin
         smearing = Dict("\$symbol" => "Smearing.MethfesselPaxton", "\$args" => [1])
         data = Dict(
+            "pseudopotentials" => Dict(:Si => "hgh/lda/si-q4"),
             "model_kwargs" => Dict("functionals" => [":lda_x", ":lda_c_pw"],
                                    "temperature" => 1e-3,
                                    "smearing" => smearing),
@@ -95,8 +106,11 @@ using UnitfulAtomic
         )
         basis = AiidaDFTK.build_basis(data, system_silicon)
 
-        ref_model = model_DFT(system_silicon, [:lda_x, :lda_c_pw];
-                              temperature=1e-3, smearing=Smearing.MethfesselPaxton(1))
+        ref_pseudos = repeat([load_psp("hgh/lda/si-q4")], 2)
+        ref_model = model_DFT(system_silicon;
+                              functionals=[:lda_x, :lda_c_pw],
+                              temperature=1e-3, smearing=Smearing.MethfesselPaxton(1),
+                              pseudopotentials=ref_pseudos)
         ref_basis = PlaneWaveBasis(ref_model; kgrid=[4, 4, 4], Ecut=15)
 
         # TODO Add == implementation for models to DFTK
@@ -124,6 +138,8 @@ using UnitfulAtomic
 
         smearing = Dict("\$symbol" => "Smearing.MarzariVanderbilt")
         data = Dict(
+            "pseudopotentials" => Dict(:Fe => "Fe.upf",
+                                       Symbol("\$kwargs") => Dict("rcut" => 10)),
             "model_kwargs" => Dict("functionals" => [":gga_x_pbe", ":gga_c_pbe"],
                                    "temperature" => 1e-2,
                                    "smearing" => smearing),

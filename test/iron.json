@@ -25,13 +25,15 @@
                     0,
                     0
                 ],
-                "pseudopotential": "../Fe.upf",
-                "pseudopotential_kwargs": {
-                    "rcut": 10
-                },
                 "magnetic_moment": 4
             }
         ]
+    },
+    "pseudopotentials": {
+        "Fe": "../Fe.upf",
+        "$kwargs": {
+            "rcut": 10
+        }
     },
     "model_kwargs": {
         "functionals": [
