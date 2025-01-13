@@ -45,17 +45,16 @@ function build_system(data)
     periodic_system(atoms, bounding_box)
 end
 
-function build_pseudopotentials(data, system)
-    pseudopotentials::Dict{Symbol, <:Any} = Dict(data["pseudopotentials"])
-    kwargs = parse_kwargs(get(pseudopotentials, Symbol("\$kwargs"), Dict()))
-    delete!(pseudopotentials, Symbol("\$kwargs"))
-    # load_psp does not accept Dict{Symbol, Any}
-    family = Dict{Symbol, String}(pseudopotentials)
+function build_pseudopotentials(pseudo_data, system)
+    kwargs = parse_kwargs(get(pseudo_data, Symbol("\$kwargs"), Dict()))
+    family = Dict{Symbol, String}(k => pseudo_data[k]
+                                  for k in keys(pseudo_data)
+                                  if k != Symbol("\$kwargs"))
     load_psp(family, system; kwargs...)
 end
 
 function build_basis(data, system)
-    pseudopotentials = build_pseudopotentials(data, system)
+    pseudopotentials = build_pseudopotentials(data["pseudopotentials"], system)
     parsed = DFTK.parse_system(system, pseudopotentials)
     model = model_DFT(parsed.lattice, parsed.atoms, parsed.positions;
                       parsed.magnetic_moments,

@@ -75,6 +75,26 @@ using UnitfulAtomic
         test_approx_eq(res, system_iron)
     end
 
+
+    @testset "build_pseudopotentials silicon" begin
+        data = Dict(:Si => "hgh/lda/si-q4")
+        pseudos = AiidaDFTK.build_pseudopotentials(data, system_silicon)
+
+        @test length(pseudos) == 2
+        @test pseudos[1] == pseudos[2]
+        @test pseudos[1] isa PspHgh
+    end
+
+    @testset "build_pseudopotentials iron" begin
+        data = Dict(:Fe => "Fe.upf",
+                    Symbol("\$kwargs") => Dict("rcut" => 10))
+        pseudos = AiidaDFTK.build_pseudopotentials(data, system_iron)
+
+        @test length(pseudos) == 1
+        @test pseudos[1] isa PspUpf
+        @test pseudos[1].rcut == 10
+    end
+
     @testset "build_basis silicon" begin
         smearing = Dict("\$symbol" => "Smearing.MethfesselPaxton", "\$args" => [1])
         data = Dict(
