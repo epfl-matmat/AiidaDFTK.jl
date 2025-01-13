@@ -77,8 +77,8 @@ using UnitfulAtomic
 
 
     @testset "build_pseudopotentials silicon" begin
-        data = Dict(:Si => "hgh/lda/si-q4")
-        pseudos = AiidaDFTK.build_pseudopotentials(data, system_silicon)
+        pseudo_data = Dict(:Si => "hgh/lda/si-q4")
+        pseudos = AiidaDFTK.build_pseudopotentials(pseudo_data, system_silicon)
 
         @test length(pseudos) == 2
         @test pseudos[1] == pseudos[2]
@@ -86,9 +86,9 @@ using UnitfulAtomic
     end
 
     @testset "build_pseudopotentials iron" begin
-        data = Dict(:Fe => "Fe.upf",
-                    Symbol("\$kwargs") => Dict("rcut" => 10))
-        pseudos = AiidaDFTK.build_pseudopotentials(data, system_iron)
+        pseudo_data = Dict(:Fe => "Fe.upf",
+                           Symbol("\$kwargs") => Dict("rcut" => 10))
+        pseudos = AiidaDFTK.build_pseudopotentials(pseudo_data, system_iron)
 
         @test length(pseudos) == 1
         @test pseudos[1] isa PspUpf
