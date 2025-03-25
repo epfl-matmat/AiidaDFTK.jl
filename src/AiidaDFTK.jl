@@ -104,6 +104,55 @@ function run_postscf(data, scfres)
     end
 end
 
+function run_refinement(data, scfres)
+    haskey(data, :refinement) || return
+
+    @info "Running refinement..."
+    # First: run a new SCF without any temperature
+    # Construct model and basis without temperature
+    model = Model(scfres.basis.model; smearing=Smearing.None(), temperature=0)
+    basis = PlaneWaveBasis(model; parse_kwargs(data["basis_kwargs"])..., )
+    # Run another scf using the starting density from scfres
+    interpolations = Dict("basis" => basis, "model" => basis.model)
+    kwargs = parse_kwargs(data["scf"]["\$kwargs"]; interpolations)
+    runtimeargs = (; maxtime=Second(get(data["scf"], "maxtime", 60*60*24*366)))
+    @info "Running SCF again without temperature"
+    scfres = self_consistent_field(basis; ρ=scfres.ρ, runtimeargs..., kwargs...)
+
+    refinement_data = data["refinement"]
+    # Build larger basis
+    basis_ref = PlaneWaveBasis(scfres.basis.model;
+                               parse_kwargs(data["basis_kwargs"])...,
+                               parse_kwargs(refinement_data["basis_kwargs"])...)
+    extra_kwargs = parse_kwargs(get(refinement_data, "\$kwargs", Dict()))
+    # Run refinement
+    refinement = refine_scfres(scfres, basis_ref; extra_kwargs...)
+    # Refine quantities of interest using Q(P) + dQ*ΔP
+    (E, dE) = refine_energies(refinement)
+    (F, dF) = refine_forces(refinement)
+    EplusdE = E.values .+ dE.values
+    FplusdF = F .+ dF
+    # Refine quantities of interest using Q(P+ΔP)
+    ψ_refined = [DFTK.ortho_qr(ψk + δψk) for (ψk, δψk) in zip(refinement.ψ, refinement.δψ)]
+    ρ_refined = compute_density(basis_ref, ψ_refined, refinement.occupation)
+    E_refined = DFTK.energy(basis_ref, ψ_refined, refinement.occupation; ρ=ρ_refined).energies
+    F_refined = compute_forces(basis_ref, ψ_refined, refinement.occupation; ρ=ρ_refined)
+
+    written_energies(E) = [sum(E), E...]
+
+    output = (;
+        E_terms = ["total", E.keys...],
+        E_base = written_energies(E.values),
+        F_base = F,
+        E_refined_old = written_energies(EplusdE),
+        F_refined_old = FplusdF,
+        E_refined_new = written_energies(E_refined.values),
+        F_refined_new = F_refined,
+    )
+
+    store_hdf5("refinement.hdf5", (; refinement_kwargs=extra_kwargs, output...))
+end
+
 
 """
 Run a DFTK calculation after the necessary environment has been setup.
@@ -169,6 +218,7 @@ function _run(; inputfile::AbstractString, allowed_versions::AbstractString)
     # Run Post SCF routines, but only if SCF converged
     if scfres.converged
         run_postscf(data, scfres)
+        run_refinement(data, scfres)
     end
 
     # Dump timings
