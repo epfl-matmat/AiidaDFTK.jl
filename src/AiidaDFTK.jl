@@ -150,7 +150,11 @@ function run_refinement(data, scfres)
         F_refined_new = F_refined,
     )
 
-    store_hdf5("refinement.hdf5", (; refinement_kwargs=extra_kwargs, output...))
+    if mpi_master()
+        open("refinement.json", "w") do io
+            JSON3.pretty(io, (; refinement_kwargs=extra_kwargs, output...))
+        end
+    end
 end
 
 
