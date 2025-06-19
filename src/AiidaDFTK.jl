@@ -139,15 +139,19 @@ function run_refinement(data, scfres)
     F_refined = compute_forces(basis_ref, ψ_refined, refinement.occupation; ρ=ρ_refined)
 
     written_energies(E) = [sum(E), E...]
+    F_to_cart(F_red) = DFTK.covector_red_to_cart.(basis.model, F_red)
 
     output = (;
         E_terms = ["total", E.keys...],
         E_base = written_energies(E.values),
         F_base = F,
+        F_base_cart = F_to_cart(F),
         E_refined_old = written_energies(EplusdE),
         F_refined_old = FplusdF,
+        F_refined_old_cart = F_to_cart(FplusdF),
         E_refined_new = written_energies(E_refined.values),
         F_refined_new = F_refined,
+        F_refined_new_cart = F_to_cart(F_refined),
     )
 
     if mpi_master()
