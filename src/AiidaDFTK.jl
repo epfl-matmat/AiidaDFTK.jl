@@ -76,6 +76,22 @@ function run_self_consistent_field(data, system, basis)
     runtimeargs    = (; maxtime=Second(get(data["scf"], "maxtime", 60*60*24*366)))
     scfres = self_consistent_field(basis; checkpointargs..., runtimeargs..., kwargs...)
 
+    if scfres.converged && (get(data["scf"], "without_temperature", false) || haskey(data, "refinement"))
+        @info "SCF converged - running again without temperature"
+
+        # Construct model and basis without temperature
+        model = Model(basis.model; smearing=Smearing.None(), temperature=0)
+        basis = PlaneWaveBasis(model; parse_kwargs(data["basis_kwargs"])..., )
+
+        # Run another scf using the starting density from scfres
+        interpolations = Dict("basis" => basis, "model" => basis.model)
+        kwargs = parse_kwargs(data["scf"]["\$kwargs"]; interpolations)
+
+        runtimeargs = (; maxtime=Second(get(data["scf"], "maxtime", 60*60*24*366)))
+        @info "Running SCF again without temperature"
+        scfres = self_consistent_field(basis; ρ=scfres.ρ, runtimeargs..., kwargs...)
+    end
+
     save_scfres("self_consistent_field.json", scfres; save_ψ=false, save_ρ=false)
     save_ψ = get(data["scf"], "save_ψ", false)
     save_scfres(checkpointfile, scfres; save_ψ, save_ρ=true)
@@ -108,17 +124,6 @@ function run_refinement(data, scfres)
     haskey(data, :refinement) || return
 
     @info "Running refinement..."
-    # First: run a new SCF without any temperature
-    # Construct model and basis without temperature
-    model = Model(scfres.basis.model; smearing=Smearing.None(), temperature=0)
-    basis = PlaneWaveBasis(model; parse_kwargs(data["basis_kwargs"])..., )
-    # Run another scf using the starting density from scfres
-    interpolations = Dict("basis" => basis, "model" => basis.model)
-    kwargs = parse_kwargs(data["scf"]["\$kwargs"]; interpolations)
-    runtimeargs = (; maxtime=Second(get(data["scf"], "maxtime", 60*60*24*366)))
-    @info "Running SCF again without temperature"
-    scfres = self_consistent_field(basis; ρ=scfres.ρ, runtimeargs..., kwargs...)
-
     refinement_data = data["refinement"]
     # Build larger basis
     basis_ref = PlaneWaveBasis(scfres.basis.model;
@@ -139,7 +144,7 @@ function run_refinement(data, scfres)
     F_refined = compute_forces(basis_ref, ψ_refined, refinement.occupation; ρ=ρ_refined)
 
     written_energies(E) = [sum(E), E...]
-    F_to_cart(F_red) = DFTK.covector_red_to_cart.(basis.model, F_red)
+    F_to_cart(F_red) = DFTK.covector_red_to_cart.(scfres.basis.model, F_red)
 
     output = (;
         E_terms = ["total", E.keys...],
