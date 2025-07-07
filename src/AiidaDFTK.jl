@@ -87,9 +87,13 @@ function run_self_consistent_field(data, system, basis)
         interpolations = Dict("basis" => basis, "model" => basis.model)
         kwargs = parse_kwargs(data["scf"]["\$kwargs"]; interpolations)
 
+        # Compute suitable starting diagtol
+        diagtol_first = DFTK.determine_diagtol(AdaptiveDiagtol(), scfres)
+        diagtolalg = AdaptiveDiagtol(; diagtol_first)
+
         runtimeargs = (; maxtime=Second(get(data["scf"], "maxtime", 60*60*24*366)))
         @info "Running SCF again without temperature"
-        scfres = self_consistent_field(basis; ρ=scfres.ρ, runtimeargs..., kwargs...)
+        scfres = self_consistent_field(basis; diagtolalg, ρ=scfres.ρ, ψ=scfres.ψ, runtimeargs..., kwargs...)
     end
 
     save_scfres("self_consistent_field.json", scfres; save_ψ=false, save_ρ=false)
