@@ -87,13 +87,5 @@
         {
             "$function": "compute_stresses_cart"
         }
-    ],
-    "refinement": {
-        "basis_kwargs": {
-            "Ecut": 40
-        },
-        "$kwargs": {
-            "tol": 1e-12
-        }
-    }
+    ]
 }

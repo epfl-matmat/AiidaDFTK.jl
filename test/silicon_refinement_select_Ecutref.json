@@ -89,10 +89,9 @@
         }
     ],
     "refinement": {
-        "basis_kwargs": {
-            "Ecut": 40
-        },
+        "η": 20,
         "$kwargs": {
+            "maxiter": 300,
             "tol": 1e-12
         }
     }

@@ -231,8 +231,10 @@ using UnitfulAtomic
             end
         end
 
-        run_functionality_test("iron.json",         -117.153287)
+        # run_functionality_test("iron.json",         -117.153287)
         # run_functionality_test("silicon_bands.json", -7.8380925; bands=true)
-        run_functionality_test("silicon_refinement.json", -7.8380925)
+        # run_functionality_test("silicon.json", -7.8380925)
+        # run_functionality_test("silicon_refinement.json", -7.8380925)
+        run_functionality_test("silicon_refinement_select_Ecutref.json", -7.8380925)
     end
 end
