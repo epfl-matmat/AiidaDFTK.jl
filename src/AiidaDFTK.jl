@@ -209,7 +209,8 @@ function run(; inputfile::AbstractString, allowed_versions::AbstractString="*")
         # Keep logging everything to stderr for manual inspection (AiiDA captures it automatically).
         # Also route log messages to the log file for automatic parsing in AiiDA.
         # Unlike SimpleLogger, FileLogger will always flush. It also truncates the file on creation.
-        logger = TeeLogger(current_logger(), FileLogger(logfile))
+        # However by default it logs all messages, so we filter to only write info and above.
+        logger = TeeLogger(current_logger(), MinLevelLogger(FileLogger(logfile), Logging.Info))
     else
         logger = NullLogger()
     end
