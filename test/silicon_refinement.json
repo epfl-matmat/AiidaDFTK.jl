@@ -1,0 +1,99 @@
+{
+    "periodic_system": {
+        "bounding_box": [
+            [
+                0.0,
+                5.1315509220433,
+                5.1315509220433
+            ],
+            [
+                5.1315509220433,
+                0.0,
+                5.1315509220433
+            ],
+            [
+                5.1315509220433,
+                5.1315509220433,
+                0.0
+            ]
+        ],
+        "atoms": [
+            {
+                "symbol": "Si",
+                "position": [
+                    1.282887730510825,
+                    1.282887730510825,
+                    1.282887730510825
+                ]
+            },
+            {
+                "symbol": "Si",
+                "position": [
+                    -1.282887730510825,
+                    -1.282887730510825,
+                    -1.282887730510825
+                ]
+            }
+        ]
+    },
+    "pseudopotentials": {
+        "Si": "hgh/lda/si-q4"
+    },
+    "model_kwargs": {
+        "functionals": [
+            ":lda_x",
+            ":lda_c_pw"
+        ],
+        "temperature": 0.001,
+        "smearing": {
+            "$symbol": "Smearing.Gaussian"
+        }
+    },
+    "basis_kwargs": {
+        "kgrid": [
+            2,
+            2,
+            2
+        ],
+        "Ecut": 10
+    },
+    "scf_parameters": {
+        "tol": 1.0e-8,
+        "damping": null,
+        "mixing": null
+    },
+    "scf": {
+        "$function": "self_consistent_field",
+        "checkpointfile": "scfres.jld2",
+        "save_ψ": true,
+        "$kwargs": {
+            "mixing": {
+                 "$symbol": "KerkerDosMixing"
+            },
+            "nbandsalg": {
+                 "$symbol": "AdaptiveBands",
+                 "$args": ["$model"],
+                 "$kwargs": {
+                     "n_bands_converge": 8
+                 }
+            },
+            "tol": 1e-12
+        }
+    },
+    "postscf": [
+        {
+            "$function": "compute_forces_cart"
+        },
+        {
+            "$function": "compute_stresses_cart"
+        }
+    ],
+    "refinement": {
+        "basis_kwargs": {
+            "Ecut": 40
+        },
+        "$kwargs": {
+            "tol": 1e-12
+        }
+    }
+}
