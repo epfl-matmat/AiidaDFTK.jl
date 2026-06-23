@@ -76,6 +76,26 @@ function run_self_consistent_field(data, system, basis)
     runtimeargs    = (; maxtime=Second(get(data["scf"], "maxtime", 60*60*24*366)))
     scfres = self_consistent_field(basis; checkpointargs..., runtimeargs..., kwargs...)
 
+    if scfres.converged && (get(data["scf"], "without_temperature", false) || haskey(data, "refinement"))
+        @info "SCF converged - running again without temperature"
+
+        # Construct model and basis without temperature
+        model = Model(basis.model; smearing=Smearing.None(), temperature=0)
+        basis = PlaneWaveBasis(model; parse_kwargs(data["basis_kwargs"])..., )
+
+        # Run another scf using the starting density from scfres
+        interpolations = Dict("basis" => basis, "model" => basis.model)
+        kwargs = parse_kwargs(data["scf"]["\$kwargs"]; interpolations)
+
+        # Compute suitable starting diagtol
+        diagtol_first = DFTK.determine_diagtol(AdaptiveDiagtol(), scfres)
+        diagtolalg = AdaptiveDiagtol(; diagtol_first)
+
+        runtimeargs = (; maxtime=Second(get(data["scf"], "maxtime", 60*60*24*366)))
+        @info "Running SCF again without temperature"
+        scfres = self_consistent_field(basis; diagtolalg, ρ=scfres.ρ, ψ=scfres.ψ, runtimeargs..., kwargs...)
+    end
+
     save_scfres("self_consistent_field.json", scfres; save_ψ=false, save_ρ=false)
     save_ψ = get(data["scf"], "save_ψ", false)
     save_scfres(checkpointfile, scfres; save_ψ, save_ρ=true)
@@ -101,6 +121,67 @@ function run_postscf(data, scfres)
         results  = getproperty(DFTK, Symbol(funcname))(scfres; kwargs...)
 
         store_hdf5(funcname * ".hdf5", (; funcname, results))
+    end
+end
+
+DFTK.@timing function run_refinement(data, scfres)
+    haskey(data, :refinement) || return
+
+    @info "Running refinement..."
+    refinement_data = data["refinement"]
+    basis_kwargs = get(refinement_data, "basis_kwargs", Dict())
+    Ecutref = get(basis_kwargs, "Ecut", nothing)
+    if isnothing(Ecutref)
+        haskey(refinement_data, "η") || error("Either basis_kwargs.Ecut or η must be specified for refinement.")
+        η = refinement_data["η"]
+        Ecutref = DFTK.select_refinement_Ecutref(scfres.basis, scfres.ψ, scfres.occupation; η)
+        @info "Selected Ecutref = $Ecutref Ha (Ecut = $(scfres.basis.Ecut) Ha)"
+    end
+    # Build larger basis
+    basis_ref = PlaneWaveBasis(scfres.basis.model;
+                               parse_kwargs(data["basis_kwargs"])...,
+                               parse_kwargs(basis_kwargs)...,
+                               Ecut=Ecutref)
+    extra_kwargs = parse_kwargs(get(refinement_data, "\$kwargs", Dict()))
+    # Run refinement
+    refinement = refine_scfres(scfres, basis_ref; extra_kwargs...)
+    # Refine quantities of interest using Q(P) + dQ*ΔP
+    DFTK.@timing "propagate by linearization" begin
+        (E, dE) = refine_energies(refinement)
+        (F, dF) = refine_forces(refinement)
+        EplusdE = E.values .+ dE.values
+        FplusdF = F .+ dF
+    end
+    # Refine quantities of interest using Q(P+ΔP)
+    DFTK.@timing "propagate by evaluation" begin
+        DFTK.@timing "update ψ" begin
+            ψ_refined = [DFTK.ortho_qr(ψk + δψk) for (ψk, δψk) in zip(refinement.ψ, refinement.δψ)]
+        end
+        ρ_refined = compute_density(basis_ref, ψ_refined, refinement.occupation)
+        E_refined = DFTK.energy(basis_ref, ψ_refined, refinement.occupation; ρ=ρ_refined).energies
+        F_refined = compute_forces(basis_ref, ψ_refined, refinement.occupation; ρ=ρ_refined)
+    end
+
+    written_energies(E) = [sum(E), E...]
+    F_to_cart(F_red) = DFTK.covector_red_to_cart.(scfres.basis.model, F_red)
+
+    output = (;
+        E_terms = ["total", E.keys...],
+        E_base = written_energies(E.values),
+        F_base = F,
+        F_base_cart = F_to_cart(F),
+        E_refined_old = written_energies(EplusdE),
+        F_refined_old = FplusdF,
+        F_refined_old_cart = F_to_cart(FplusdF),
+        E_refined_new = written_energies(E_refined.values),
+        F_refined_new = F_refined,
+        F_refined_new_cart = F_to_cart(F_refined),
+    )
+
+    if mpi_master()
+        open("refinement.json", "w") do io
+            JSON3.pretty(io, (; refinement_kwargs=extra_kwargs, Ecutref, output...))
+        end
     end
 end
 
@@ -169,6 +250,7 @@ function _run(; inputfile::AbstractString, allowed_versions::AbstractString)
     # Run Post SCF routines, but only if SCF converged
     if scfres.converged
         run_postscf(data, scfres)
+        run_refinement(data, scfres)
     end
 
     # Dump timings

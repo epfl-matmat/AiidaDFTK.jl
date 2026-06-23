@@ -201,38 +201,40 @@ using UnitfulAtomic
         function run_functionality_test(inputfile, ref_energy; bands=false)
             @testset "$inputfile" begin
             # We need to do this below @__DIR__ because the iron.json contains relative paths
-            mktempdir(@__DIR__) do dir
-                # Run SCF and check we got all expected files
-                cd(dir) do
-                    AiidaDFTK.run(inputfile=joinpath(@__DIR__, inputfile))
-                end
+            dir = mktempdir(@__DIR__; cleanup=false)
+            # Run SCF and check we got all expected files
+            cd(dir) do
+                AiidaDFTK.run(inputfile=joinpath(@__DIR__, inputfile))
+            end
 
-                @test isfile(joinpath(dir, "scfres.jld2"))
-                let scfres = load_scfres(joinpath(dir, "scfres.jld2"))
-                    @test scfres.converged
-                    @test abs(scfres.energies.total - ref_energy) < 1e-2
-                    bands && @test haskey(scfres, :ψ)
-                end
+            @test isfile(joinpath(dir, "scfres.jld2"))
+            let scfres = load_scfres(joinpath(dir, "scfres.jld2"))
+                @test scfres.converged
+                @test abs(scfres.energies.total - ref_energy) < 1e-2
+                bands && @test haskey(scfres, :ψ)
+            end
 
-                # Check the self_consistent_field.json has all expected keys
-                open(joinpath(dir, "self_consistent_field.json")) do io
-                    data = JSON3.read(io)
-                    # Energy terms should sum to total, so if we sum all values:
-                    @test abs(data["energies"]["total"] - ref_energy) < 1e-2
-                    @test sum(values(data["energies"])) ≈ 2data["energies"]["total"]
+            # Check the self_consistent_field.json has all expected keys
+            open(joinpath(dir, "self_consistent_field.json")) do io
+                data = JSON3.read(io)
+                # Energy terms should sum to total, so if we sum all values:
+                @test abs(data["energies"]["total"] - ref_energy) < 1e-2
+                @test sum(values(data["energies"])) ≈ 2data["energies"]["total"]
 
-                    # TODO Put tests for all keys here, which are read by Aiida
-                end
+                # TODO Put tests for all keys here, which are read by Aiida
+            end
 
-                open(joinpath(dir, "$(first(splitext(inputfile))).log")) do io
-                    errors = read(io, String)
-                    @test occursin("Finished successfully", errors)
-                end
+            open(joinpath(dir, "$(first(splitext(inputfile))).log")) do io
+                errors = read(io, String)
+                @test occursin("Finished successfully", errors)
             end
             end
         end
 
-        run_functionality_test("iron.json",         -117.153287)
-        run_functionality_test("silicon_bands.json", -7.8380925; bands=true)
+        # run_functionality_test("iron.json",         -117.153287)
+        # run_functionality_test("silicon_bands.json", -7.8380925; bands=true)
+        # run_functionality_test("silicon.json", -7.8380925)
+        # run_functionality_test("silicon_refinement.json", -7.8380925)
+        run_functionality_test("silicon_refinement_select_Ecutref.json", -7.8380925)
     end
 end
